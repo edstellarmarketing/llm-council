@@ -16,8 +16,8 @@ client = OpenAI(
 COUNCIL_MEMBERS = [
     {"name": "Claude", "model": "anthropic/claude-3.5-sonnet", "color": "#4CAF50"},
     {"name": "GPT-4", "model": "openai/gpt-4-turbo", "color": "#F44336"},
-    {"name": "Gemini", "model": "google/gemini-pro-1.5", "color": "#2196F3"},
-    {"name": "Grok", "model": "x-ai/grok-beta", "color": "#9C27B0"},
+    {"name": "Gemini", "model": "google/gemini-flash-1.5", "color": "#2196F3"},
+    {"name": "Grok", "model": "x-ai/grok-2-1212", "color": "#9C27B0"},
 ]
 
 # Edstellar Sales Email Rules
