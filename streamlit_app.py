@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import re
 from openai import OpenAI
 
 # Page config
@@ -231,7 +232,41 @@ EDSTELLAR_RULES = """# Edstellar Sales Email Rules Guide
 - "Incorporates your real-world scenarios and challenges"
 - Avoid: "Fully customizable" (vague and overused)"""
 
-def get_council_response(question, member, rules):
+def parse_enquiry(enquiry_text):
+    """Parse the enquiry text to extract key information"""
+    info = {
+        "name": "",
+        "email": "",
+        "organization": "",
+        "job_title": "",
+        "country": "",
+        "phone": "",
+        "training_needs": "",
+        "page": "",
+        "origin": ""
+    }
+    
+    # Extract information using regex
+    patterns = {
+        "name": r"Name\s*-\s*(.+?)(?:\n|$)",
+        "email": r"Email\s*-\s*(.+?)(?:\n|$)",
+        "organization": r"Organization Name\s*-\s*(.+?)(?:\n|$)",
+        "job_title": r"Job Title\s*-\s*(.+?)(?:\n|$)",
+        "country": r"Country\s*-\s*(.+?)(?:\n|$)",
+        "phone": r"Phone Number\s*-\s*(.+?)(?:\n|$)",
+        "training_needs": r"Training Needs\s*-\s*(.+?)(?:\n|$)",
+        "page": r"Page\s*-\s*(.+?)(?:\n|$)",
+        "origin": r"Origin\s*-\s*(.+?)(?:\n|$)"
+    }
+    
+    for key, pattern in patterns.items():
+        match = re.search(pattern, enquiry_text, re.IGNORECASE)
+        if match:
+            info[key] = match.group(1).strip()
+    
+    return info
+
+def get_council_response(enquiry_info, member, rules):
     """Get response from a council member with rules"""
     system_prompts = {
         "Claude": f"You are an expert email advisor using Claude AI. Generate professional, nuanced sales emails for Edstellar while strictly following the email rules. Generate a complete, professional email ready to send.\n\n{rules}",
@@ -240,12 +275,24 @@ def get_council_response(question, member, rules):
         "Grok": f"You are an expert email advisor using Grok AI. Generate engaging, creative sales emails for Edstellar while strictly following the email rules. Generate a complete, professional email ready to send.\n\n{rules}",
     }
     
+    context = f"""
+    Recipient Name: {enquiry_info['name']}
+    Job Title: {enquiry_info['job_title']}
+    Organization: {enquiry_info['organization']}
+    Email: {enquiry_info['email']}
+    Country: {enquiry_info['country']}
+    Phone: {enquiry_info['phone']}
+    Training Needs: {enquiry_info['training_needs']}
+    Source Page: {enquiry_info['page']}
+    Origin/Course: {enquiry_info['origin']}
+    """
+    
     try:
         response = client.chat.completions.create(
             model=member["model"],
             messages=[
                 {"role": "system", "content": system_prompts[member["name"]]},
-                {"role": "user", "content": f"Generate a complete sales email based on this context:\n\n{question}"}
+                {"role": "user", "content": f"Generate a complete sales email based on this enquiry information:\n\n{context}"}
             ],
             max_tokens=800,
         )
@@ -278,42 +325,61 @@ with st.sidebar:
         rules = EDSTELLAR_RULES
 
 # Main content
-st.markdown("### Email Context")
+st.markdown("### Paste Enquiry Details")
 
-col1, col2 = st.columns(2)
+enquiry_text = st.text_area(
+    "Paste the complete enquiry email here:",
+    height=300,
+    placeholder="""From: <business@edstellar.com>
+Date: Fri, Nov 28, 2025 at 12:49 PM
+Subject: Edstellar Enquiry - course page
+To: <business@edstellar.com>
 
-with col1:
-    recipient_name = st.text_input("Recipient Name", placeholder="e.g., Mr. Anoop Singh Dangi")
-    company_name = st.text_input("Company Name", placeholder="e.g., REC Limited")
+Hello Edstellar Admin,
 
-with col2:
-    training_need = st.text_input("Training Topic", placeholder="e.g., Oracle EBS R12 Technical and DBA")
-    origin = st.text_input("Source/Origin", placeholder="e.g., oracle-database-19c-administration-training")
+You have received an enquiry from Anoop Singh Dangi. The organisation details are furnished below -      
 
-additional_context = st.text_area(
-    "Additional Context (optional):",
-    height=100,
-    placeholder="Any specific details about the inquiry, company news, or personalization points..."
+      Name - Anoop Singh Dangi
+      Email - sm36968@gmail.com
+      Organization Name - REC Limited
+      Job Title - Officer
+      Country - India (भारत)
+      Country Code - 91
+      Phone Number - 9474259390          
+      Training Needs - Oracle EBS r12 Technical and DBA training required at on-site.
+      Page - course 
+      Origin - oracle-database-19c-administration-training""",
+    help="Paste the entire enquiry email from Edstellar"
 )
 
-# Construct the question
-question = f"""
-Recipient: {recipient_name}
-Company: {company_name}
-Training Need: {training_need}
-Source: {origin}
-Additional Context: {additional_context}
-"""
-
 if st.button("Generate Email Variations", type="primary"):
-    if recipient_name and company_name and training_need:
-        with st.spinner("Generating email variations..."):
+    if enquiry_text.strip():
+        # Parse the enquiry
+        enquiry_info = parse_enquiry(enquiry_text)
+        
+        # Display parsed information
+        with st.expander("📊 Parsed Information", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Name:** {enquiry_info['name']}")
+                st.write(f"**Organization:** {enquiry_info['organization']}")
+                st.write(f"**Job Title:** {enquiry_info['job_title']}")
+                st.write(f"**Email:** {enquiry_info['email']}")
+            with col2:
+                st.write(f"**Country:** {enquiry_info['country']}")
+                st.write(f"**Phone:** {enquiry_info['phone']}")
+                st.write(f"**Page:** {enquiry_info['page']}")
+                st.write(f"**Origin:** {enquiry_info['origin']}")
+            st.write(f"**Training Needs:** {enquiry_info['training_needs']}")
+        
+        # Generate emails
+        with st.spinner("Generating email variations from different AI models..."):
             cols = st.columns(2)
             
             for idx, member in enumerate(COUNCIL_MEMBERS):
                 with cols[idx % 2]:
-                    st.markdown(f"### {member['name']} Approach")
-                    response = get_council_response(question, member, rules)
+                    st.markdown(f"### {member['name']}")
+                    response = get_council_response(enquiry_info, member, rules)
                     
                     # Display the email
                     st.markdown(
@@ -327,11 +393,11 @@ if st.button("Generate Email Variations", type="primary"):
                     
                     st.markdown("---")
     else:
-        st.warning("Please fill in at least: Recipient Name, Company Name, and Training Need")
+        st.warning("Please paste an enquiry email first!")
 
 # Footer
 st.markdown("---")
 st.markdown("💡 **Tips:**")
-st.markdown("- Fill in as much context as possible for better personalization")
-st.markdown("- Review all variations to find the tone that matches your relationship with the prospect")
+st.markdown("- Simply paste the entire enquiry email - the system will automatically extract relevant information")
+st.markdown("- Review all four AI-generated variations to find the best tone and approach")
 st.markdown("- Always customize the generated email with specific details before sending")
